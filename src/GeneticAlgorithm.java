@@ -1,29 +1,9 @@
 import java.io.*;
 import java.util.*;
 
-public class GeneticAlgorithm {
-
-    static String fileName = "src/items"; // Đường dẫn file chứa dữ liệu
-    static double carrierLimit = 25.0; // Giới hạn trọng lượng (kg)
-    static int populationSize = 10; // Kích thước quần thể
-    static int generationSize = 100; // Số thế hệ
-    static double mutationRate = 0.1; // Tỉ lệ đột biến
-
-    // Lớp Item đại diện cho một đối tượng với id, trọng lượng, và giá trị
-    static class Item {
-        int id;
-        double weight;
-        double value;
-
-        public Item(int id, double weight, double value) {
-            this.id = id;
-            this.weight = weight;
-            this.value = value;
-        }
-    }
-
-    // Đọc dữ liệu từ file và tạo danh sách Item
-    static List<Item> readItemsFromFile(String fileName) throws IOException {
+public class GeneticAlgorithm implements GeneticAlgorithmInterface {
+    @Override
+    public List<Item> readItemsFromFile(String fileName) throws IOException {
         List<Item> items = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
             String line;
@@ -38,8 +18,8 @@ public class GeneticAlgorithm {
         return items;
     }
 
-    // Tạo một lời giải ngẫu nhiên
-    static List<Integer> createRandomSolution(int size) {
+    @Override
+    public List<Integer> createRandomSolution(int size) {
         Random random = new Random();
         List<Integer> solution = new ArrayList<>();
         for (int i = 0; i < size; i++) {
@@ -48,129 +28,102 @@ public class GeneticAlgorithm {
         return solution;
     }
 
-    // Kiểm tra lời giải có hợp lệ không
-    static boolean validSolution(List<Item> items, List<Integer> solution, double limit) {
+    @Override
+    public boolean validSolution(List<Item> items, List<Integer> solution, double carrierLimit) {
         double totalWeight = 0;
         for (int i = 0; i < solution.size(); i++) {
             if (solution.get(i) == 1) {
-                totalWeight += items.get(i).weight;
+                totalWeight += items.get(i).getWeight();
             }
-            if (totalWeight > limit) {
+            if (totalWeight > carrierLimit) {
                 return false;
             }
         }
         return true;
     }
 
-    // Tính giá trị của lời giải
-    static double calculateValue(List<Item> items, List<Integer> solution) {
+    @Override
+    public double calculateValue(List<Item> items, List<Integer> solution) {
         double totalValue = 0;
         for (int i = 0; i < solution.size(); i++) {
             if (solution.get(i) == 1) {
-                totalValue += items.get(i).value;
+                totalValue += items.get(i).getValue();
             }
         }
         return totalValue;
     }
 
-    // Tạo quần thể ban đầu
-    static List<List<Integer>> initialPopulation(int popSize, List<Item> items, double limit) {
+    @Override
+    public List<List<Integer>> initialPopulation(List<Item> items, int populationSize, double carrierLimit) {
         List<List<Integer>> population = new ArrayList<>();
-        Random random = new Random();
-        while (population.size() < popSize) {
+        while (population.size() < populationSize) {
             List<Integer> solution = createRandomSolution(items.size());
-            if (validSolution(items, solution, limit)) {
-                if (!population.contains(solution)) {
-                    population.add(solution);
-                }
+            if (validSolution(items, solution, carrierLimit) && !population.contains(solution)) {
+                population.add(solution);
             }
         }
         return population;
     }
 
-    // Chọn cá thể tốt nhất giữa hai cá thể ngẫu nhiên
-    static List<Integer> tournamentSelection(List<List<Integer>> population, List<Item> items) {
-        Random random = new Random();
-        int ticket1 = random.nextInt(population.size());
-        int ticket2 = random.nextInt(population.size());
-
-        double value1 = calculateValue(items, population.get(ticket1));
-        double value2 = calculateValue(items, population.get(ticket2));
-
-        return value1 > value2 ? population.get(ticket1) : population.get(ticket2);
-    }
-
-    // Phép lai một điểm
-    static List<Integer> crossover(List<Integer> parent1, List<Integer> parent2, List<Item> items, double limit) {
-        Random random = new Random();
-        int breakpoint = random.nextInt(parent1.size());
-        List<Integer> child = new ArrayList<>();
-        child.addAll(parent1.subList(0, breakpoint));
-        child.addAll(parent2.subList(breakpoint, parent2.size()));
-
-        if (validSolution(items, child, limit)) {
-            return child;
-        }
-        return crossover(parent1, parent2, items, limit);
-    }
-
-    // Phép đột biến
-    static List<Integer> mutation(List<Integer> chromosome, List<Item> items, double limit) {
-        Random random = new Random();
-        List<Integer> mutated = new ArrayList<>(chromosome);
-        int index1 = random.nextInt(chromosome.size());
-        int index2 = random.nextInt(chromosome.size());
-
-        // Hoán đổi 2 gene
-        Collections.swap(mutated, index1, index2);
-
-        if (validSolution(items, mutated, limit)) {
-            return mutated;
-        }
-        return mutation(chromosome, items, limit);
-    }
-
-    // Tạo thế hệ mới
-    static List<List<Integer>> createGeneration(List<List<Integer>> population, double mutationRate, List<Item> items, double limit) {
+    @Override
+    public List<List<Integer>> createGeneration(List<List<Integer>> population, List<Item> items, double mutationRate, double carrierLimit) {
         List<List<Integer>> newGeneration = new ArrayList<>();
         Random random = new Random();
         for (int i = 0; i < population.size(); i++) {
             List<Integer> parent1 = tournamentSelection(population, items);
             List<Integer> parent2 = tournamentSelection(population, items);
 
-            List<Integer> child = crossover(parent1, parent2, items, limit);
+            // Lai ghép (crossover) để tạo thế hệ mới
+            List<Integer> child = crossover(parent1, parent2, items, carrierLimit);
 
+            // Xác suất xảy ra đột biến (mutation)
             if (random.nextDouble() < mutationRate) {
-                child = mutation(child, items, limit);
+                child = mutation(child, items, carrierLimit);
             }
             newGeneration.add(child);
         }
         return newGeneration;
     }
 
-    // Thuật toán
-    static void geneticAlgorithm(double carrierLimit, int populationSize, int generationSize, double mutationRate, List<Item> items) {
-        List<List<Integer>> population = initialPopulation(populationSize, items, carrierLimit);
-        List<Double> valueList = new ArrayList<>();
+    private List<Integer> tournamentSelection(List<List<Integer>> population, List<Item> items) {
+        Random random = new Random();
+        int ticket1 = random.nextInt(population.size());
+        int ticket2 = random.nextInt(population.size());
 
-        for (int generation = 0; generation < generationSize; generation++) {
-            population = createGeneration(population, mutationRate, items, carrierLimit);
+        // Chọn cá thể tốt hơn từ hai cá thể ngẫu nhiên
+        double value1 = calculateValue(items, population.get(ticket1));
+        double value2 = calculateValue(items, population.get(ticket2));
 
-            // in ra các generation
-            System.out.println("Generation " + generation + ":");
-            for (List<Integer> chromosome : population) {
-                System.out.println(chromosome + " -> Value: " + calculateValue(items, chromosome));
-            }
-
-            double bestValue = calculateValue(items, population.get(0));
-            valueList.add(bestValue);
-        }
-
-        System.out.println("Best values in each generation: " + valueList);
+        return value1 > value2 ? population.get(ticket1) : population.get(ticket2);
     }
 
-    public static void main(String[] args) throws IOException {
-        List<Item> items = readItemsFromFile(fileName);
-        geneticAlgorithm(carrierLimit, populationSize, generationSize, mutationRate, items);
+    private List<Integer> crossover(List<Integer> parent1, List<Integer> parent2, List<Item> items, double carrierLimit) {
+        Random random = new Random();
+        int breakpoint = random.nextInt(parent1.size()); // Điểm cắt để lai ghép
+        List<Integer> child = new ArrayList<>();
+        child.addAll(parent1.subList(0, breakpoint));
+        child.addAll(parent2.subList(breakpoint, parent2.size()));
+
+        // Kiểm tra nếu con hợp lệ thì trả về, ngược lại thực hiện lại lai ghép
+        if (validSolution(items, child, carrierLimit)) {
+            return child;
+        }
+        return crossover(parent1, parent2, items, carrierLimit);
+    }
+
+    private List<Integer> mutation(List<Integer> chromosome, List<Item> items, double carrierLimit) {
+        Random random = new Random();
+        List<Integer> mutated = new ArrayList<>(chromosome);
+        int index1 = random.nextInt(chromosome.size());
+        int index2 = random.nextInt(chromosome.size());
+
+        // Thực hiện hoán đổi ngẫu nhiên hai gene
+        Collections.swap(mutated, index1, index2);
+
+        // Nếu cá thể sau đột biến hợp lệ thì trả về, ngược lại thực hiện lại đột biến
+        if (validSolution(items, mutated, carrierLimit)) {
+            return mutated;
+        }
+        return mutation(chromosome, items, carrierLimit);
     }
 }
